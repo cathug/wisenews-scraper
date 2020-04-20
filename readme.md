@@ -1,4 +1,4 @@
-# Openup Wisenews Scraper readme
+# Early Warning Wisenews Scraper readme
 last updated: April 20, 2020
 
 ---
