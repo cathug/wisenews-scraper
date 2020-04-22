@@ -178,7 +178,7 @@ class WiseNewsScraper:
 
     # change the sender name, sender email, and recepient email accordingly
     sender_name = config('SENDER')
-    sender_email = config('HKU_LOGIN')
+    sender_email = config('FROM_EMAIL')
     recepient_email = config('TO_EMAIL')
 
     
