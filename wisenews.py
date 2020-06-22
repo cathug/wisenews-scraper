@@ -222,8 +222,8 @@ class WiseNewsScraper:
             wait = WebDriverWait(self.driver, DRIVER_WAIT)
             
             # close the popup (special notice added since November)
-            wait.until(EC.element_to_be_clickable((
-                By.XPATH, '//*[@id="popup_this"]/span') ) ).click()
+            # wait.until(EC.element_to_be_clickable((
+            #     By.XPATH, '//*[@id="popup_this"]/span') ) ).click()
     
     
             # time.sleep(5)
@@ -300,8 +300,8 @@ class WiseNewsScraper:
             time.sleep(5)
 
             # close the Coronavirus Social Listening Platform popup
-            # wait.until(EC.visibility_of_element_located(
-            #     (By.XPATH, '//*[@id="popup_alert_layer"]/div[3]/a') ) ).click()
+            wait.until(EC.visibility_of_element_located(
+                (By.XPATH, '//*[@id="popup_alert_layer"]/div[3]/a') ) ).click()
 
             # uncheck all regions, then set region to Hong Kong only
             wait.until(EC.visibility_of_element_located(
