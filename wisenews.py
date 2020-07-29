@@ -1,6 +1,6 @@
 # filename: wisenews.py
 # Author: Byron Chiang (CSRP)
-# Last Updated: Apr 20, 2020
+# Last Updated: July 20, 2020
 #
 # This script is a stand-alone version of the scraper in the 
 # OpenUp Kitchen Server I wrote a while back.  It contains all the necessary 
@@ -8,7 +8,7 @@
 
 
 import json, re, time, random, datetime
-import sys, logging
+import sys, logging, traceback
 import pytz, enum, os, logging
 
 from pymongo import MongoClient 
@@ -21,6 +21,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 # from selenium.webdriver.support.select import Select
+from selenium.common.exceptions import TimeoutException
 
 from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
 
@@ -221,12 +222,20 @@ class WiseNewsScraper:
             self.driver.get(HKU_LIBRARY_LOGIN_URL)
             wait = WebDriverWait(self.driver, DRIVER_WAIT)
             
-            # close the popup (special notice added since November)
-            # wait.until(EC.element_to_be_clickable((
-            #     By.XPATH, '//*[@id="popup_this"]/span') ) ).click()
-    
-    
-            # time.sleep(5)
+            try:
+                # close the popup (special notice added since November)
+                wait.until(EC.element_to_be_clickable((
+                    By.XPATH, '//*[@id="popup_this"]/span') ) ).click()
+
+                # time.sleep(5)
+
+            except TimeoutException:
+                exc_type, exc_value, exc_tb = sys.exc_info()
+                trace = traceback.format_exception(exc_type, exc_value, exc_tb)
+                logging.info(trace)
+                logging.info('No popup exists.')
+        
+        
             # click on login link
             wait.until(EC.title_contains('HKU Libraries') )
             wait.until(EC.presence_of_element_located(
@@ -254,8 +263,11 @@ class WiseNewsScraper:
 
             logging.info('Logged in to HKU Library.')
 
-        except Exception as e:
-            sys.exit(f'Unable to log in to HKU with provided credentials {e}')
+        except TimeoutException:
+            exc_type, exc_value, exc_tb = sys.exc_info()
+            trace = traceback.format_exception(exc_type, exc_value, exc_tb)
+            logging.error(trace)
+            sys.exit(f'Unable to log in to HKU with provided credentials.')
 
     #---------------------------------------------------------------------------
 
@@ -277,8 +289,11 @@ class WiseNewsScraper:
 
             logging.info('Accessed WiseNews Portal.')
 
-        except Exception as e:
-            sys.exit(f'Unable to access Wisenews Portal. {e}')
+        except TimeoutException:
+            exc_type, exc_value, exc_tb = sys.exc_info()
+            trace = traceback.format_exception(exc_type, exc_value, exc_tb)
+            logging.error(trace)
+            sys.exit(f'Unable to access Wisenews Portal.')
 
 
     #---------------------------------------------------------------------------
@@ -299,10 +314,19 @@ class WiseNewsScraper:
             # wait 5 seconds.  sometimes driver misses checks
             time.sleep(5)
 
-            # close the Coronavirus Social Listening Platform popup
-            wait.until(EC.visibility_of_element_located(
-                (By.XPATH, '//*[@id="popup_alert_layer"]/div[3]/a') ) ).click()
+            try:
+                # close the Coronavirus Social Listening Platform popup
+                wait.until(EC.visibility_of_element_located(
+                    (By.XPATH, '//*[@id="popup_alert_layer"]/div[3]/a') ) ).click()
 
+            except TimeoutException:
+                exc_type, exc_value, exc_tb = sys.exc_info()
+                trace = traceback.format_exception(exc_type, exc_value, exc_tb)
+                logging.info(trace)
+                logging.info('No popup exists.')
+
+
+            
             # uncheck all regions, then set region to Hong Kong only
             wait.until(EC.visibility_of_element_located(
                 (By.XPATH, '//*[@id="regionSelectAll"]') ) ).click()
@@ -331,8 +355,11 @@ class WiseNewsScraper:
 
             logging.info('Set Search Parameters.')
 
-        except Exception as e:
-            sys.exit(f'Unable to send search parameters to Wisenews Portal. {e}')
+        except TimeoutException:
+            exc_type, exc_value, exc_tb = sys.exc_info()
+            trace = traceback.format_exception(exc_type, exc_value, exc_tb)
+            logging.error(trace)
+            sys.exit(f'Unable to send search parameters to Wisenews Portal.')
 
     #---------------------------------------------------------------------------
 
@@ -374,7 +401,10 @@ class WiseNewsScraper:
 
             logging.info('Scraping complete.')
 
-        except Exception as e:
+        except TimeoutException:
+            exc_type, exc_value, exc_tb = sys.exc_info()
+            trace = traceback.format_exception(exc_type, exc_value, exc_tb)
+            logging.error(trace)
             sys.exit('Unable to scarpe news. Aborting')
 
     #---------------------------------------------------------------------------
@@ -428,7 +458,10 @@ class WiseNewsScraper:
 
             logging.info('Sending complete.')
 
-        except Exception as e:
+        except TimeoutException:
+            exc_type, exc_value, exc_tb = sys.exc_info()
+            trace = traceback.format_exception(exc_type, exc_value, exc_tb)
+            logging.error(trace)
             sys.exit('Unable to send news. Aborting')
     
     #---------------------------------------------------------------------------
@@ -449,82 +482,85 @@ class WiseNewsScraper:
                 '//*[@id="content_source"]/a') ) )
             wait.until(EC.presence_of_all_elements_located((By.XPATH, 
                 '//*[@id="content_details"]') ) )
-
-
-            # extract text and remove invalid unicode characters
-            headings = self.driver.find_elements_by_xpath('//*[@class="bluebold"]')
-            headings = [WiseNewsScraper.strip_illegal_characters(x.text) 
-                for x in headings]
-
-            # extract new content
-            contents = self.driver.find_elements_by_xpath(
-                '//*[@class="content"]')
-            contents = [WiseNewsScraper.strip_illegal_characters(x.text) 
-                for x in contents]
-
-            # extract sources
-            sources = self.driver.find_elements_by_xpath(
-                '//*[@id="content_source"]/a')
-            sources = [x.text for x in sources]
-
-            # extract page numbers
-            pages = self.driver.find_elements_by_xpath(
-                '//*[@id="content_details"]')
-            # odd entries in pages are page_details
-            # even entries are unique Wisenews document ids
-            page_details = [x.text for i, x in enumerate(pages) if i%2==0 ]
-            document_ids = [x.text.split(': ')[-1]
-                for i, x in enumerate(pages) if i%2!=0 ]
-
-            # extract date
-            date_pattern = re.compile(r'\d{4}-\d{2}-\d{2}')
-            page_pattern = re.compile(r'^[A-Z]{1}\d{2}\b')
             
-            articles = []
-            for source, heading, content, page_detail, document_id, in zip(
-                sources, headings, contents, page_details, document_ids):
-                
-                article = {}
-                section = []
+        except TimeoutException:
+            exc_type, exc_value, exc_tb = sys.exc_info()
+            trace = traceback.format_exception(exc_type, exc_value, exc_tb)
+            logging.error(trace)
+            sys.exit()
 
-                page_detail = (re.sub(r'\s+', '', page_detail) ).split('|')   
+        # extract text and remove invalid unicode characters
+        headings = self.driver.find_elements_by_xpath('//*[@class="bluebold"]')
+        headings = [WiseNewsScraper.strip_illegal_characters(x.text) 
+            for x in headings]
+
+        # extract new content
+        contents = self.driver.find_elements_by_xpath(
+            '//*[@class="content"]')
+        contents = [WiseNewsScraper.strip_illegal_characters(x.text) 
+            for x in contents]
+
+        # extract sources
+        sources = self.driver.find_elements_by_xpath(
+            '//*[@id="content_source"]/a')
+        sources = [x.text for x in sources]
+
+        # extract page numbers
+        pages = self.driver.find_elements_by_xpath(
+            '//*[@id="content_details"]')
+        # odd entries in pages are page_details
+        # even entries are unique Wisenews document ids
+        page_details = [x.text for i, x in enumerate(pages) if i%2==0 ]
+        document_ids = [x.text.split(': ')[-1]
+            for i, x in enumerate(pages) if i%2!=0 ]
+
+        # extract date
+        date_pattern = re.compile(r'\d{4}-\d{2}-\d{2}')
+        page_pattern = re.compile(r'^[A-Z]{1}\d{2}\b')
+        
+        # create json list
+        articles = []
+        for source, heading, content, page_detail, document_id, in zip(
+            sources, headings, contents, page_details, document_ids):
                 
-                while len(page_detail):
-                    item = page_detail.pop()
-                    if date_pattern.fullmatch(item): # if it's an ISO date
-                        date = item.split('-')
-                        date = datetime.datetime(
-                            int(date[0]), int(date[1]), int(date[-1]), 0, 0, 0,
-                            tzinfo=HK_TIME)
+            article = {}
+            section = []
+
+            page_detail = (re.sub(r'\s+', '', page_detail) ).split('|')   
+                
+            while len(page_detail):
+                item = page_detail.pop()
+                if date_pattern.fullmatch(item): # if it's an ISO date
+                    date = item.split('-')
+                    date = datetime.datetime(
+                        int(date[0]), int(date[1]), int(date[-1]), 0, 0, 0,
+                        tzinfo=HK_TIME)
                         
-                    if page_pattern.fullmatch(item): # if contains page number
-                        page = item
-                    else:
-                        page = None
+                if page_pattern.fullmatch(item): # if contains page number
+                    page = item
+                else:
+                    page = None
                     
-                    if item in news_section:
-                        section.append(item)
+                if item in news_section:
+                    section.append(item)
                     
-                    if page_detail==[]:
-                        sections="/".join(section)
+                if page_detail==[]:
+                    sections="/".join(section)
                 
-                article['document_id'] = document_id
-                article['heading'] = heading
-                article['meta_data'] = {
-                    'source': source,
-                    'pub_date': date,
-                    'section': sections,
-                    'page': page,
-                }
+            article['document_id'] = document_id
+            article['heading'] = heading
+            article['meta_data'] = {
+                'source': source,
+                'pub_date': date,
+                'section': sections,
+                'page': page,
+            }
 
-                article['content'] = content
+            article['content'] = content
                 
                 
-                articles.append(article)
+            articles.append(article)
 
-
-        except Exception as e:
-            sys.exit(f'Failed to insert to mongoDB: {e}')
 
         self.database.create_index(collection, 'document_id')
         
@@ -538,8 +574,11 @@ class WiseNewsScraper:
                 logging.info('Insertion Skipped. Record already exists in Database.')
                 pass
 
-            except Exception as e:
-                sys.exit(f'Failed to insert to mongoDB: {e}')
+            except TimeoutException:
+                exc_type, exc_value, exc_tb = sys.exc_info()
+                trace = traceback.format_exception(exc_type, exc_value, exc_tb)
+                logging.error(trace)
+                sys.exit()
 
 
 
