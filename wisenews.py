@@ -238,8 +238,8 @@ class WiseNewsScraper:
         
             # click on login link
             wait.until(EC.title_contains('HKU Libraries') )
-            wait.until(EC.presence_of_element_located(
-                (By.LINK_TEXT, 'MyAccount@HKUL') ) ).click()
+            wait.until(EC.element_to_be_clickable((
+                By.XPATH, '//*[@class="button green"]') ) ).click()
 
             # switch to sign frame
             while True:
@@ -363,6 +363,57 @@ class WiseNewsScraper:
 
     #---------------------------------------------------------------------------
 
+    def update_search_local_news(self, *,
+                                 date_range=WisenewsDateRanges.THREE_DAYS,
+                                 keywords=Keywords.SUICIDE.terms,
+                                 news_section=WISENEWS_NEWS_SECTIONS):
+        '''
+            function to update parameters in search form
+            Use this function to update search parameters
+            assuming searching the date range and region remain the same
+        '''
+
+        self.driver.switch_to.window(self.main_handle)
+
+        try:
+            wait = WebDriverWait(self.driver, DRIVER_WAIT)
+            wait.until(EC.frame_to_be_available_and_switch_to_it('ws5-content') )
+            wait.until(EC.frame_to_be_available_and_switch_to_it('result-list') )
+         
+            # wait 5 seconds.  sometimes driver misses checks
+            time.sleep(5)
+            wait.until(EC.visibility_of_element_located(
+                (By.XPATH, '//*[@id="edit_search"]') ) ).click()
+
+
+            # reset news section
+            wait.until(EC.element_to_be_clickable(
+                    (By.XPATH, '//*[@id="ShowSection"]') ) ).clear()
+
+            # search section if specified
+            if news_section is not None:
+                wait.until(EC.element_to_be_clickable(
+                    (By.XPATH, '//*[@id="ShowSection"]') ) ).send_keys(
+                        ','.join(news_section) )
+
+
+            # clear field and update search term
+            wait.until(EC.element_to_be_clickable((
+                By.XPATH, '//*[@id="searchTxt"]') ) ).clear()
+            wait.until(EC.element_to_be_clickable((
+                By.XPATH, '//*[@id="searchTxt"]') ) ).send_keys(keywords, Keys.ENTER)
+
+
+            logging.info('Updated Search Parameters.')
+
+        except TimeoutException:
+            exc_type, exc_value, exc_tb = sys.exc_info()
+            trace = traceback.format_exception(exc_type, exc_value, exc_tb)
+            logging.error(trace)
+            sys.exit(f'Unable to update search parameters on Wisenews Portal.')
+
+    #---------------------------------------------------------------------------
+
     def scrape_local_news(self):
         '''
             function to scrape all news articles
@@ -417,8 +468,18 @@ class WiseNewsScraper:
         try:
             # click on view button
             wait = WebDriverWait(self.driver, DRIVER_WAIT)
-            wait.until(
-                EC.frame_to_be_available_and_switch_to_it('result-list') )
+
+            try:
+                wait.until(
+                    EC.frame_to_be_available_and_switch_to_it('result-list') )
+            except TimeoutException:
+                exc_type, exc_value, exc_tb = sys.exc_info()
+                trace = traceback.format_exception(exc_type, exc_value, exc_tb)
+                logging.info(trace)
+                logging.info('Switching to parent frame and retrying')
+                wait.until(EC.frame_to_be_available_and_switch_to_it('ws5-content') )
+                wait.until(EC.frame_to_be_available_and_switch_to_it('result-list') )
+
             wait.until(EC.visibility_of_element_located(
                 (By.XPATH, '//*[@id="Imageemail"]') ) ).click()
             
